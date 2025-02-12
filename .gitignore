@@ -1,0 +1,9 @@
+venv/
+data/
+visualizations/
+output/
+
+.DS_Store
+.cursorrules
+
+*.pyc
