@@ -7,6 +7,7 @@ import config
 from tools.eda_tools import get_dataframe_info, save_figure, create_report, ensure_directory
 from tools.vision_tools import analyze_image
 import io
+from memory import Memory  # Import your custom memory manager
 
 SYSTEM_PROMPT = """
 You are an exploratory data analysis (EDA) assistant powered by smolagents.
@@ -17,7 +18,7 @@ Guidelines:
    - save_figure: Save generated plots to disk
    - create_report: Generate and save a final analysis report
    - ensure_directory: Create a directory for saving figures (ensures it exists)
-   - analyze_image: Analyze an image and return a description of the image (use for analyzing the genearted plots)
+   - analyze_image: Analyze an image and return a description of the image (use for analyzing the generated plots)
 
 3. IMPORTANT: To access the DataFrame and libraries, use the following variables directly:
    - df: The pandas DataFrame to analyze
@@ -107,7 +108,7 @@ class EDAAgent:
             api_key=config.OPENAI_API_KEY
         )
         
-        # Create tools list without execute_analysis
+        # Create tools list (without execute_analysis)
         self.tools = [
             get_dataframe_info,
             save_figure,
@@ -115,6 +116,9 @@ class EDAAgent:
             ensure_directory,
             analyze_image
         ]
+        
+        # Initialize persistent memory using our Memory class
+        self.memory = Memory()
         
         # Initialize CodeAgent
         self.agent = CodeAgent(
@@ -131,12 +135,13 @@ class EDAAgent:
             ]
         )
 
-    def run(self, query: str = None):
+    def run(self, query: str = None, reset: bool = False):
         """
         Run the EDA process based on a user query or default analysis.
         
         Args:
             query: Optional user query for specific analysis.
+            reset: If False, the agent retains its previous memory and context.
         """
         if query is None:
             query = (
@@ -144,29 +149,35 @@ class EDAAgent:
                 "Start with basic statistics and create relevant visualizations for numeric columns."
             )
         
-        # Create execution context with DataFrame and libraries
+        # Create execution context with DataFrame, libraries, and persistent memory
         execution_context = {
-            "df": self.df.copy(),  # Explicit copy to avoid mutation issues,
+            "df": self.df.copy(),
             "visualization_paths": [],
             "pd": pd,
             "np": np,
             "plt": plt,
             "sns": sns,
-            "io": io
+            "io": io,
+            "memory": self.memory.get_history()
         }
         
-        # Verify DataFrame exists in context
         if execution_context["df"] is None:
             raise ValueError("DataFrame not initialized in execution context")
 
-        # Pass context directly to agent's state
+        # Run the agent; by setting reset=False, the agent builds on previous memory
         result = self.agent.run(
             task=query,
+            reset=reset,
             additional_args={
-                "state": execution_context,  # Key changed to 'state'
+                "state": execution_context,
                 "system_prompt": SYSTEM_PROMPT
             }
         )
+        
+        # Optionally, update our persistent memory with new logs from the agent's run
+        # (Here we simply append all new log messages; you could also filter or summarize them.)
+        for log in self.agent.logs:
+            self.memory.add(str(log))
         
         return result
 
@@ -177,4 +188,4 @@ class EDAAgent:
         Args:
             query: The analysis request from the user.
         """
-        return self.run(query)
+        return self.run(query, reset=False)

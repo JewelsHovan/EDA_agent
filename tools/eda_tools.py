@@ -75,6 +75,8 @@ def create_report(report_text: str, image_links: list, output_path: str) -> str:
     Returns:
         A confirmation message indicating where the report was saved.
     """
+    # remove the output/ base 
+    image_links = [link.replace("output/", "") for link in image_links]
     images_md = "\n".join(f"![Visualization]({link})" for link in image_links)
     report = f"# Exploratory Data Analysis Report\n\n{report_text}\n\n## Visualizations\n{images_md}\n"
     
